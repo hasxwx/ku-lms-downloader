@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import sys
 from urllib import request as urllib_request
+from urllib.parse import urlparse
 
 from .client import USER_AGENT, LmsClient
 from .models import Attachment, Material
@@ -15,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 _CHUNK = 1 << 16  # 64 KiB
 _PROGRESS_EVERY = 4 << 20  # log progress every 4 MiB
+
+_VIDEO_EXTS = {".mp4", ".mkv", ".mov", ".avi", ".wmv", ".m4v", ".flv", ".webm", ".ts", ".mpg", ".mpeg"}
+_AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
 
 
 @dataclass(slots=True)
@@ -96,7 +100,8 @@ def _download_one(
         stats.links += 1
         return stats
 
-    target = folder / _unique_name(_safe_name(attachment.file_name), used_names)
+    base = _ensure_extension(_safe_name(attachment.file_name), attachment)
+    target = folder / _unique_name(base, used_names)
     try:
         result = _stream_to_file(client, attachment, target, overwrite=overwrite)
     except _HtmlResponseError:
@@ -213,6 +218,30 @@ def _unique_name(name: str, used: set[str]) -> str:
             used.add(candidate)
             return candidate
         counter += 1
+
+
+def _ensure_extension(name: str, attachment: Attachment) -> str:
+    """Give media files a usable extension when the LMS title lacks one.
+
+    Korea University's kucom recordings are often titled like "Ch. 6(Review)_Ch. 7"
+    (no real extension, and the embedded dots make Path().suffix report a bogus
+    ' 7'). Without a real extension Windows can't pick a player. For video/audio
+    attachments, ensure a real media extension; for other files only fill in when
+    there is genuinely no suffix at all.
+    """
+    url_ext = Path(urlparse(attachment.download_url).path).suffix.lower()
+    suffix = Path(name).suffix.lower()
+    if attachment.media_kind == "video":
+        if suffix in _VIDEO_EXTS:
+            return name
+        return name + (url_ext if url_ext in _VIDEO_EXTS else ".mp4")
+    if attachment.media_kind == "audio":
+        if suffix in _AUDIO_EXTS:
+            return name
+        return name + (url_ext if url_ext in _AUDIO_EXTS else ".m4a")
+    if not suffix and 2 <= len(url_ext) <= 6:
+        return name + url_ext
+    return name
 
 
 def _safe_name(name: str) -> str:
