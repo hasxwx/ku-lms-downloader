@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ku-lms-downloader"
+version = "0.1.0"
+description = "Paste a Korea University LMS link, download its attachments and weekly-study videos. Standard library only."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+kulms = "kulms.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["kulms"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
